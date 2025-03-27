@@ -1,29 +1,25 @@
-import { gapi } from 'gapi-script';
+const SCOPES = 'https://www.googleapis.com/auth/calendar';
 
-const CLIENT_ID = 'INSERT_Key';
-const API_KEY = 'INSERT_CLIENT_ID';
-const SCOPES = 'https://www.googleapis.com/auth/calendar.events';
-
-export const signIn = async () => {
-    try {
-        const authInstance = window.gapi.auth2.getAuthInstance();
-        const user = await authInstance.signIn();
-
-        const accessToken = user.getAuthResponse().access_token;
-        return accessToken;
-    } catch (error) {
-        console.error("Google Sign-In error:", error);
-    }
+export const signIn = (callback, clientId) => {
+    window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: SCOPES,
+        callback: (response) => {
+            if (response.error) {
+                console.error("Google Sign-In error:", response);
+                return;
+            }
+            callback(response.access_token);
+        }
+    }).requestAccessToken();
 };
 
-// Ensure OAuth scopes include calendar access
-export const initGoogleAPI = () => {
-    window.gapi.load("client:auth2", async () => {
+export const initGoogleAPI = (apiKey, clientId) => {
+    window.gapi.load("client", async () => {
         await window.gapi.client.init({
-            apiKey: API_KEY,
-            clientId: CLIENT_ID,
+            apiKey: apiKey,
+            clientId: clientId,
             discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"],
-            scope: SCOPES // Allows viewing calendars
         });
     });
 };

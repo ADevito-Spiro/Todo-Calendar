@@ -6,36 +6,47 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import { initGoogleAPI, signIn } from "./utils/googleAuth";
 import { getUserCalendars, getEventsFromCalendar, getEventDetails } from "./utils/googleCalendar";
 
-function App() {
+function AppNew() {
     const [calendars, setCalendars] = useState([]);
     const [selectedCalendars, setSelectedCalendars] = useState({});
     const [events, setEvents] = useState([]);
     const [token, setToken] = useState(null);
 
-    const apiKey = import.meta.env.VITE_API_KEY;
-    const clientId = import.meta.env.VITE_CLIENT_ID;
-
     useEffect(() => {
-        initGoogleAPI(apiKey, clientId);
-    }, [apiKey, clientId]);
+        // ✅ Wait for Google API to be initialized before rendering anything
+        const initialize = async () => {
+            await initGoogleAPI();
+        };
+        initialize();
+    }, []);
 
-    const handleSignIn = () => {
-        signIn(async (accessToken) => {  // Remove clientId here because it's passed directly
+    const handleSignIn = async () => {
+        try {
+            const accessToken = await signIn(); // ✅ signIn now correctly handles GIS token request
+            if (!accessToken) {
+                console.error("Failed to get access token");
+                return;
+            }
+
             setToken(accessToken);
 
+            // ✅ Fetch user calendars
             const userCalendars = await getUserCalendars(accessToken);
             setCalendars(userCalendars);
 
+            // ✅ Default to all calendars selected
             const initialSelection = userCalendars.reduce((acc, cal) => {
                 acc[cal.id] = true;
                 return acc;
             }, {});
             setSelectedCalendars(initialSelection);
 
+            // ✅ Fetch events for all calendars
             await loadAllEvents(userCalendars, initialSelection, accessToken);
-        }, clientId);  // Pass clientId here
+        } catch (error) {
+            console.error("Sign-in error:", error);
+        }
     };
-
 
     const loadAllEvents = async (calendars, selection, accessToken) => {
         let allEvents = [];
@@ -44,7 +55,7 @@ function App() {
                 const eventsData = await getEventsFromCalendar(cal.id, accessToken);
                 const formattedEvents = eventsData.map(event => ({
                     id: event.id,
-                    title: event.summary,
+                    title: `${event.summary}`,
                     start: event.start.dateTime || event.start.date,
                     end: event.end?.dateTime || event.end?.date,
                     allDay: !event.start.dateTime,
@@ -64,29 +75,13 @@ function App() {
 
     return (
         <div>
-            <h1>Calendar To-Do</h1>
-            {/*<button onClick={handleSignIn}>Sign in with Google</button>*/}
-            <div id="g_id_onload"
-                 data-client_id={clientId}  // Use clientId variable here
-                 data-context="signin"
-                 data-ux_mode="popup"
-                 data-callback="handleSignIn"
-                 data-auto_select="true"
-                 data-itp_support="true">
-            </div>
+            <h1>Google Calendar Checklist</h1>
+            <button onClick={handleSignIn}>Sign in with Google</button>
 
-            <div className="g_id_signin"
-                 data-type="standard"
-                 data-shape="pill"
-                 data-theme="filled_black"
-                 data-text="continue_with"
-                 data-size="large"
-                 data-logo_alignment="left">
-            </div>
             {calendars.length > 0 && (
                 <div>
                     {calendars.map((cal) => (
-                        <label key={cal.id} style={{display: "block", margin: "5px 0"}}>
+                        <label key={cal.id} style={{ display: "block", margin: "5px 0" }}>
                             <input
                                 type="checkbox"
                                 checked={selectedCalendars[cal.id]}
@@ -108,10 +103,21 @@ function App() {
                     center: "title",
                     right: "dayGridMonth,timeGridWeek,timeGridDay"
                 }}
-
+                eventClick={(eventClick) => {
+                    getEventDetails(eventClick.event.id, token).then((eventDetails) => {
+                        const eventDetailsElement = document.getElementById('event-details');
+                        eventDetailsElement.style.display = 'block';
+                        eventDetailsElement.innerHTML = `
+                            <h2>${eventDetails.summary}</h2>
+                            <p>${eventDetails.description}</p>
+                            <p>${eventDetails.start.dateTime}</p>
+                            <p>${eventDetails.end.dateTime}</p>
+                        `;
+                    });
+                }}
             />
         </div>
     );
 }
 
-export default App;
+export default AppNew;
